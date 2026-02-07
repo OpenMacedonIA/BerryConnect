@@ -9,8 +9,8 @@ Este directorio contiene el código y las instrucciones para desplegar "Network 
 El sistema utiliza **MQTT** para la comunicación. TIO (el servidor central) debe tener un broker MQTT corriendo (como Mosquitto). Los agentes publican telemetría y alertas en topics específicos.
 
 ### Estructura de Topics
-- `tio/agents/{id}/telemetry`: Datos periódicos (temp, cpu, ram).
-- `tio/agents/{id}/alerts`: Eventos críticos (intruso detectado, caída).
+- `wamd/agents/{id}/telemetry`: Datos periódicos (temp, cpu, ram).
+- `wamd/agents/{id}/alerts`: Eventos críticos (intruso detectado, caída).
 
 ## Requisitos Previos (Servidor Central)
 

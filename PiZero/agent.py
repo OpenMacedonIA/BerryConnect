@@ -79,10 +79,10 @@ TELEMETRY_INTERVAL = CONFIG["telemetry_interval"]
 CLIENT_ID = f"berry_agent_{AGENT_ID}"
 
 # MQTT Topics
-TOPIC_TELEMETRY = f"tio/agents/{AGENT_ID}/telemetry"
-TOPIC_ALERTS = f"tio/agents/{AGENT_ID}/alerts"
-TOPIC_COMMANDS = f"tio/agents/{AGENT_ID}/commands"
-TOPIC_RESPONSES = f"tio/agents/{AGENT_ID}/responses"
+TOPIC_TELEMETRY = f"wamd/agents/{AGENT_ID}/telemetry"
+TOPIC_ALERTS = f"wamd/agents/{AGENT_ID}/alerts"
+TOPIC_COMMANDS = f"wamd/agents/{AGENT_ID}/commands"
+TOPIC_RESPONSES = f"wamd/agents/{AGENT_ID}/responses"
 
 # --- TELEMETRY FUNCTIONS ---
 def get_cpu_temp():
@@ -259,34 +259,94 @@ def on_message(client, userdata, msg):
         }
         client.publish(TOPIC_RESPONSES, json.dumps(error_response))
 
-# --- MAIN LOOP ---
+# Placeholder for extended modules
+modules = {}
+def init_extended_modules(mqtt_client):
+    """Initialize and return extended modules (e.g., sensors, camera)"""
+    logger.info("Initializing extended modules...")
+    # Example: modules["camera"] = CameraModule(mqtt_client)
+    return {}
+
+# --- MAIN FUNCTION ---
 def main():
-    """Main agent loop"""
+    """Main entry point with BLE fallback support"""
+    global modules
+    
+    logger.info(f"Starting BerryConnect Agent: {AGENT_ID}")
+    logger.info(f"Transport: MQTT + BLE Fallback")
+    
+    # Check initial connectivity
+    from connectivity_manager import ConnectivityManager, ConnectionMode
+    
+    conn_mgr = ConnectivityManager(
+        mqtt_broker=BROKER_ADDRESS,
+        mqtt_port=BROKER_PORT,
+        ble_server_name=CONFIG.get("ble_server_name", "WatermelonD"),
+        check_interval=CONFIG.get("connectivity_check_interval", 30)
+    )
+    
+    initial_mode = conn_mgr.check_connectivity()
+    logger.info(f"Initial connectivity mode: {initial_mode.value}")
+    
+    # Start in appropriate mode
+    if initial_mode == ConnectionMode.MQTT:
+        run_mqtt_mode(conn_mgr)
+    elif initial_mode == ConnectionMode.BLE:
+        run_ble_mode(conn_mgr)
+    else:
+        logger.error("No connectivity available, retrying in 30s...")
+        time.sleep(30)
+        main()  # Retry
+
+
+def run_mqtt_mode(conn_mgr):
+    """Run agent in MQTT mode with connectivity monitoring"""
+    global modules
+    
+    logger.info("=== MQTT MODE ===")
+    
+    # Setup MQTT client
     client = mqtt.Client(CLIENT_ID)
     client.on_connect = on_connect
     client.on_message = on_message
-
-    logger.info(f"Connecting to {BROKER_ADDRESS}:{BROKER_PORT}...")
+    
+    # Initialize extended modules (sensors, camera, etc.)
+    modules = init_extended_modules(client)
+    
     try:
         client.connect(BROKER_ADDRESS, BROKER_PORT, 60)
         client.loop_start()
-    except Exception as e:
-        logger.error(f"Connection failed: {e}")
-        return
-
-    try:
+        
+        logger.info("MQTT connected, starting monitoring...")
+        
+        # Start connectivity monitoring
+        def on_mode_change(old_mode, new_mode):
+            logger.warning(f"🔄 Connection mode changed: {old_mode.value} → {new_mode.value}")
+            
+            if new_mode == ConnectionMode.BLE:
+                # Switch to BLE
+                logger.info("WiFi lost, switching to BLE fallback...")
+                client.loop_stop()
+                client.disconnect()
+                run_ble_mode(conn_mgr)
+            elif new_mode == ConnectionMode.OFFLINE:
+                logger.error("All connectivity lost!")
+        
+        conn_mgr.start_monitoring(on_mode_change)
+        
+        # Main MQTT loop
         while True:
-            # Collect and send telemetry
             stats = get_system_stats()
             payload = json.dumps(stats)
             
-            logger.debug(f"Sending telemetry: {payload}")
+            logger.debug(f"Sending telemetry (MQTT)")
             client.publish(TOPIC_TELEMETRY, payload)
             
             time.sleep(TELEMETRY_INTERVAL)
             
     except KeyboardInterrupt:
         logger.info("Stopping agent...")
+        conn_mgr.stop_monitoring()
         client.publish(TOPIC_ALERTS, json.dumps({
             "status": "offline",
             "msg": "Agent stopped",
@@ -294,6 +354,77 @@ def main():
         }))
         client.loop_stop()
         client.disconnect()
+
+
+def run_ble_mode(conn_mgr):
+    """Run agent in BLE fallback mode"""
+    import asyncio
+    from ble_client import BLEClient
+    from bcp_protocol import AlertCode
+    
+    logger.info("=== BLE FALLBACK MODE ===")
+    logger.warning("Limited functionality: basic telemetry and critical alerts only")
+    
+    ble_client = BLEClient(agent_id=AGENT_ID)
+    
+    async def ble_loop():
+        # Connect with encryption
+        logger.info("Connecting to BLE server...")
+        if not await ble_client.connect():
+            logger.error("BLE connection failed, retrying WiFi in 30s...")
+            time.sleep(30)
+            main()
+            return
+        
+        logger.info("✓ BLE connected and encrypted")
+        
+        # Start connectivity monitoring
+        def on_mode_change(old_mode, new_mode):
+            logger.warning(f"🔄 Connection mode changed: {old_mode.value} → {new_mode.value}")
+            
+            if new_mode == ConnectionMode.MQTT:
+                # WiFi restored, switch back
+                logger.info("WiFi restored! Switching back to MQTT...")
+                asyncio.create_task(ble_client.disconnect())
+                run_mqtt_mode(conn_mgr)
+        
+        conn_mgr.start_monitoring(on_mode_change)
+        
+        # Main BLE loop
+        try:
+            while ble_client.is_connected():
+                # Collect basic telemetry
+                stats = get_system_stats()
+                
+                # Send encrypted telemetry
+                await ble_client.send_telemetry(
+                    cpu_percent=stats["cpu_percent"],
+                    ram_percent=stats["ram_percent"],
+                    temp_c=stats.get("cpu_temp"),
+                    battery_percent=stats.get("battery_percent"),
+                    uptime_seconds=stats["uptime_seconds"]
+                )
+                
+                logger.debug("Sent telemetry (BLE, encrypted)")
+                
+                # Send heartbeat
+                await ble_client.send_heartbeat()
+                
+                # Check for critical conditions
+                if stats["cpu_temp"] and stats["cpu_temp"] > 80:
+                    await ble_client.send_alert(AlertCode.SYSTEM, "High temp")
+                
+                await asyncio.sleep(TELEMETRY_INTERVAL)
+                
+        except KeyboardInterrupt:
+            logger.info("Stopping agent...")
+            conn_mgr.stop_monitoring()
+            await ble_client.send_alert(AlertCode.SYSTEM, "Agent stopped")
+            await ble_client.disconnect()
+    
+    # Run BLE async loop
+    asyncio.run(ble_loop())
+
 
 if __name__ == "__main__":
     main()

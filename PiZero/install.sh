@@ -24,16 +24,25 @@ fi
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-echo "[STEP 1/5] Installing system dependencies..."
+echo "[STEP 1/6] Installing system dependencies..."
 sudo apt-get update
-sudo apt-get install -y python3-pip avahi-utils
+sudo apt-get install -y python3-pip avahi-utils bluez libbluetooth-dev
 
 echo ""
-echo "[STEP 2/5] Installing Python dependencies..."
+echo "[STEP 2/6] Installing Python dependencies..."
+echo "Installing base dependencies (MQTT, psutil)..."
 pip3 install paho-mqtt psutil --break-system-packages || pip3 install paho-mqtt psutil
 
+echo "Installing BLE dependencies (bleak, cryptography)..."
+pip3 install bleak cryptography --break-system-packages || pip3 install bleak cryptography
+
+# Enable Bluetooth service
+echo "Enabling Bluetooth service..."
+sudo systemctl enable bluetooth
+sudo systemctl start bluetooth
+
 echo ""
-echo "[STEP 3/5] Configuring agent..."
+echo "[STEP 3/6] Configuring agent..."
 
 # Check if config.json already exists
 if [ -f "$SCRIPT_DIR/config.json" ]; then
@@ -63,6 +72,9 @@ if [ "$SKIP_CONFIG" != "true" ]; then
             read -p "Enter MQTT Broker Port [1883]: " BROKER_PORT
             BROKER_PORT=${BROKER_PORT:-1883}
             
+            read -p "Enter BLE Server Name [WatermelonD]: " BLE_SERVER
+            BLE_SERVER=${BLE_SERVER:-WatermelonD}
+            
             # Create config.json
             cat > "$SCRIPT_DIR/config.json" <<EOF
 {
@@ -70,7 +82,9 @@ if [ "$SKIP_CONFIG" != "true" ]; then
   "broker_port": $BROKER_PORT,
   "agent_id": "AUTO",
   "telemetry_interval": 10,
-  "log_level": "INFO"
+  "log_level": "INFO",
+  "ble_server_name": "$BLE_SERVER",
+  "connectivity_check_interval": 30
 }
 EOF
         fi
@@ -82,6 +96,9 @@ EOF
         read -p "Enter MQTT Broker Port [1883]: " BROKER_PORT
         BROKER_PORT=${BROKER_PORT:-1883}
         
+        read -p "Enter BLE Server Name [WatermelonD]: " BLE_SERVER
+        BLE_SERVER=${BLE_SERVER:-WatermelonD}
+        
         # Create config.json
         cat > "$SCRIPT_DIR/config.json" <<EOF
 {
@@ -89,7 +106,9 @@ EOF
   "broker_port": $BROKER_PORT,
   "agent_id": "AUTO",
   "telemetry_interval": 10,
-  "log_level": "INFO"
+  "log_level": "INFO",
+  "ble_server_name": "$BLE_SERVER",
+  "connectivity_check_interval": 30
 }
 EOF
     fi
@@ -98,7 +117,7 @@ EOF
 fi
 
 echo ""
-echo "[STEP 4/5] Creating systemd service..."
+echo "[STEP 4/6] Creating systemd service..."
 
 # Get current user
 if [ "$EUID" -eq 0 ]; then
@@ -133,7 +152,7 @@ EOF
 echo "✓ Service file created: $SERVICE_FILE"
 
 echo ""
-echo "[STEP 5/5] Enabling and starting service..."
+echo "[STEP 5/6] Enabling and starting service..."
 
 # Enable linger for user to allow services to run without login
 sudo loginctl enable-linger $INSTALL_USER
@@ -149,6 +168,10 @@ echo "=== Installation Complete!            ==="
 echo "========================================="
 echo ""
 echo "BerryConnect Agent has been installed and started."
+echo ""
+echo "✅ WiFi/MQTT connectivity: Enabled"
+echo "✅ BLE Fallback: Enabled (automatic)"
+echo "✅ Encryption: AES-128-GCM (BLE mode)"
 echo ""
 echo "Useful commands:"
 echo "  Check status:  systemctl --user status berry_agent"

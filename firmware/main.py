@@ -44,9 +44,9 @@ def connect_mqtt():
     global mqtt_client
     try:
         client = MQTTClient(HOSTNAME, BRAIN_IP, port=MQTT_PORT)
-        client.set_last_will(f"tio/agents/{HOSTNAME}/status", "offline", retain=True)
+        client.set_last_will(f"wamd/agents/{HOSTNAME}/status", "offline", retain=True)
         client.connect()
-        client.publish(f"tio/agents/{HOSTNAME}/status", "online", retain=True)
+        client.publish(f"wamd/agents/{HOSTNAME}/status", "online", retain=True)
         print("Connected to MQTT")
         return client
     except Exception as e:
@@ -57,7 +57,7 @@ def send_telemetry(data):
     msg = json.dumps(data)
     if not using_bluetooth and mqtt_client:
         try:
-            mqtt_client.publish(f"tio/agents/{HOSTNAME}/telemetry", msg)
+            mqtt_client.publish(f"wamd/agents/{HOSTNAME}/telemetry", msg)
         except:
             print("MQTT Publish Failed")
     elif using_bluetooth:

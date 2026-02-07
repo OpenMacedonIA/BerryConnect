@@ -10,7 +10,7 @@ WIFI_SSID = "YOUR_WIFI_SSID"
 WIFI_PASS = "YOUR_WIFI_PASSWORD"
 BROKER_ADDRESS = "192.168.1.100"
 CLIENT_ID = "tio_esp32_sensor_1"
-TOPIC_TELEMETRY = b"tio/agents/esp32_1/telemetry"
+TOPIC_TELEMETRY = b"wamd/agents/esp32_1/telemetry"
 
 # --- HARDWARE ---
 # DHT22 connected to GPIO 15
