@@ -3,5 +3,6 @@
   "broker_port": 1883,
   "agent_id": "AUTO",
   "telemetry_interval": 10,
-  "log_level": "INFO"
+  "log_level": "INFO",
+  "command_timeout": 30
 }
