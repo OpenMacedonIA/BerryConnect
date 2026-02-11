@@ -1,12 +1,12 @@
-# Network Bros (Mini TIOs) - Agentes Satélite
+# BerryConnect - Agentes Satélite
 
-Este directorio contiene el código y las instrucciones para desplegar "Network Bros", pequeños agentes satélite que extienden los sentidos de TIO por toda la casa u oficina.
+Este directorio contiene el código y las instrucciones para desplegar "Berrys", pequeños agentes satélite que extienden los sentidos de WatermelonD por toda la casa u oficina.
 
 > **✨ NUEVO:** El sistema ahora está completamente automatizado. No necesitas editar código manualmente.
 
 ## Arquitectura
 
-El sistema utiliza **MQTT** para la comunicación. TIO (el servidor central) debe tener un broker MQTT corriendo (como Mosquitto). Los agentes publican telemetría y alertas en topics específicos.
+El sistema utiliza **MQTT** para la comunicación. WatermelonD (el servidor central) debe tener un broker MQTT corriendo (como Mosquitto). Los agentes publican telemetría y alertas en topics específicos.
 
 ### Estructura de Topics
 - `wamd/agents/{id}/telemetry`: Datos periódicos (temp, cpu, ram).
@@ -51,11 +51,11 @@ Si instalaste WatermelonD correctamente, no necesitas configurar nada más en el
    ```
 
 El instalador:
-- ✅ Detecta automáticamente el broker MQTT (o pregunta si falla)
-- ✅ Instala dependencias
-- ✅ Crea configuración automática
-- ✅ Configura servicio systemd
-- ✅ Inicia el agente automáticamente
+- Detecta automáticamente el broker MQTT (o pregunta si falla)
+- Instala dependencias
+- Crea configuración automática
+- Configura servicio systemd
+- Inicia el agente automáticamente
 
 ### Método 2: Configuración Manual
 
